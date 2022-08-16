@@ -1,0 +1,107 @@
+version: "3.8"
+
+services:
+  db:
+    container_name: db
+    image: mysql
+    restart: always
+    volumes:
+      - api-references-data:/var/lib/mysql/
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: references
+    ports:
+      - "3307:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 20s
+      retries: 10
+    cap_add:
+      - SYS_NICE # CAP_SYS_NICE
+    networks:
+      appnet:
+        ipv4_address: 172.24.2.1
+
+  # rabbitmq:
+  #   container_name: "rabbitmq"
+  #   image: rabbitmq:3.8-management-alpine
+  #   environment:
+  #     - RABBITMQ_DEFAULT_USER=myuser
+  #     - RABBITMQ_DEFAULT_PASS=mypassword
+  #   healthcheck:
+  #     test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+  #     interval: 10s
+  #     timeout: 20s
+  #     retries: 3
+  #   ports:
+  #   # AMQP protocol port
+  #     - '5672:5672'
+  #   # HTTP management UI
+  #     - '15672:15672'
+  #   networks:
+  #     appnet:
+  #       ipv4_address: 172.24.2.2
+
+  # worker:
+  #   build:
+  #     context: ./worker
+  #     dockerfile: Dockerfile
+  #   image: olx-latam/email-worker
+  #   command: bash -c "npm run start"
+  #   depends_on:
+  #     rabbitmq:
+  #       condition: service_healthy
+  #   networks:
+  #     appnet:
+  #       ipv4_address: 172.24.2.3
+
+  backend:
+    container_name: api-references
+    build:
+      context: ./api-references
+      dockerfile: Dockerfile
+    image: olx-latam/api-references
+    volumes:
+      - ./backend:/code
+      - nodemodules:/code/node_modules
+    ports:
+      - "8000:8000"
+    command: bash -c "npx sequelize db:migrate:undo:all && npx sequelize db:migrate && npx sequelize db:seed:all && npm run start"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      appnet:
+        ipv4_address: 172.24.2.4
+
+  frontend:
+    container_name: front-references
+    build:
+      context: ./front-references
+      dockerfile: Dockerfile
+    image: olx-latam/front-references
+    volumes:
+      - nodemodules-front:/code/node_modules
+    ports:
+      - "8080:80"
+    command: [nginx, '-g', 'daemon off;']
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      appnet:
+        ipv4_address: 172.24.2.5
+
+volumes:
+  api-references-data:
+  nodemodules:
+  nodemodules-front:
+
+networks:
+  appnet:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: "172.24.2.0/16"
