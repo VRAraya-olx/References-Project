@@ -1,0 +1,7 @@
+[submodule "front-references"]
+	path = front-references
+	url = git@github.com:acg-argentina/front-references.git
+
+[submodule "api-references"]
+	path = api-references
+	url = git@github.com:acg-argentina/api-references.git
